@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlatWise - AI-Powered HDB Search</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* slate-50 */
+        }
+        .gradient-bg {
+            background-image: linear-gradient(to right, #3b82f6, #22d3ee);
+        }
+        .tag-btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .tag-btn.active {
+            background-color: #eff6ff; /* blue-50 */
+            color: #2563eb; /* blue-600 */
+            border-color: #2563eb; /* blue-600 */
+            font-weight: 600;
+        }
+        /* Custom Slider Styles */
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            background: #d1d5db; /* gray-300 */
+            border-radius: 5px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #2563eb; /* blue-600 */
+            cursor: pointer;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #2563eb; /* blue-600 */
+            cursor: pointer;
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="text-slate-800">
+    <div id="app">
+        <!-- Header Section -->
+        <header class="gradient-bg text-white">
+            <div class="container mx-auto px-6 py-20 text-center">
+                 <span class="inline-flex items-center bg-white/20 text-white text-sm font-medium px-3 py-1 rounded-full mb-4">
+                    <i data-lucide="sparkles" class="w-4 h-4 mr-2"></i>
+                    AI-Powered HDB Search
+                </span>
+                <h1 class="text-4xl md:text-6xl font-bold leading-tight mb-4">Find Your Perfect HDB Home with FlatWise</h1>
+                <p class="text-lg md:text-xl max-w-3xl mx-auto text-white/90">Transform your home search with intelligent AI that understands your needs. Get personalized recommendations with transparent scores and expert insights.</p>
+                <div class="mt-8">
+                    <a href="#search-section" class="bg-white text-blue-600 font-semibold px-8 py-3 rounded-lg shadow-lg hover:bg-slate-100 transition">Start Your Search</a>
+                </div>
+            </div>
+        </header>
+
+        <!-- Features Section -->
+        <section class="bg-white py-16">
+            <div class="container mx-auto px-6 grid md:grid-cols-3 gap-12 text-center">
+                <div class="feature-item">
+                    <div class="flex items-center justify-center bg-blue-100 text-blue-600 w-16 h-16 rounded-full mx-auto mb-4">
+                        <i data-lucide="brain-circuit" class="w-8 h-8"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">AI-Driven Insights</h3>
+                    <p class="text-slate-600">Bayesian Network analysis provides market price predictions and value assessments.</p>
+                </div>
+                <div class="feature-item">
+                    <div class="flex items-center justify-center bg-blue-100 text-blue-600 w-16 h-16 rounded-full mx-auto mb-4">
+                        <i data-lucide="bar-chart-3" class="w-8 h-8"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">Smart Ranking</h3>
+                    <p class="text-slate-600">Multi-criteria decision analysis matches flats to your unique preferences.</p>
+                </div>
+                <div class="feature-item">
+                    <div class="flex items-center justify-center bg-blue-100 text-blue-600 w-16 h-16 rounded-full mx-auto mb-4">
+                        <i data-lucide="database" class="w-8 h-8"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-2">Data-Driven</h3>
+                    <p class="text-slate-600">Powered by comprehensive HDB resale data and proven algorithms.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Content: Search and Results -->
+        <main id="search-section" class="container mx-auto px-4 py-12">
+            <div class="lg:grid lg:grid-cols-12 lg:gap-8">
+                <!-- Left Sidebar: Filters -->
+                <aside class="lg:col-span-4 xl:col-span-3">
+                    <div class="bg-white p-6 rounded-2xl shadow-lg">
+                        <h2 class="text-xl font-bold mb-2">Find Your Flat</h2>
+                        <p class="text-slate-500 mb-6">Set your preferences to discover your ideal home.</p>
+
+                        <!-- MUST-HAVES -->
+                        <div class="space-y-6">
+                            <div>
+                                <label class="text-sm font-semibold text-slate-600">TOWN/ESTATE</label>
+                                <div class="flex flex-wrap gap-2 mt-2">
+                                    <button class="tag-btn text-sm border border-slate-300 px-3 py-1 rounded-full">Ang Mo Kio</button>
+                                    <button class="tag-btn text-sm border border-slate-300 px-3 py-1 rounded-full active">Bedok</button>
+                                    <button class="tag-btn text-sm border border-slate-300 px-3 py-1 rounded-full">Bishan</button>
+                                    <button class="tag-btn text-sm border border-slate-300 px-3 py-1 rounded-full">Bukit Batok</button>
+                                    <button class="tag-btn text-sm border border-slate-300 px-3 py-1 rounded-full">Central Area</button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-sm font-semibold text-slate-600">FLAT TYPE</label>
+                                <div class="flex flex-wrap gap-2 mt-2">
+                                    <button class="tag-btn text-sm border border-slate-300 px-3 py-1 rounded-full">2-Room</button>
+                                    <button class="tag-btn text-sm border border-slate-300 px-3 py-1 rounded-full active">3-Room</button>
+                                    <button class="tag-btn text-sm border border-slate-300 px-3 py-1 rounded-full active">4-Room</button>
+                                    <button class="tag-btn text-sm border border-slate-300 px-3 py-1 rounded-full">5-Room</button>
+                                    <button class="tag-btn text-sm border border-slate-300 px-3 py-1 rounded-full">Executive</button>
+                                </div>
+                            </div>
+                             <div>
+                                <label for="max-price" class="text-sm font-semibold text-slate-600">MAXIMUM PRICE (S$)</label>
+                                <input type="number" id="max-price" placeholder="e.g., 650000" class="mt-2 w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                             <div>
+                                <label for="min-lease" class="text-sm font-semibold text-slate-600">MINIMUM LEASE (YEARS)</label>
+                                <input type="number" id="min-lease" placeholder="e.g., 70" class="mt-2 w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                        </div>
+
+                        <!-- PREFERENCES -->
+                        <div class="mt-8 pt-6 border-t border-slate-200 space-y-6">
+                            <h3 class="text-lg font-bold">Your Preferences</h3>
+                            <div class="slider-group">
+                                <div class="flex justify-between items-center mb-1">
+                                    <label class="text-sm font-semibold text-slate-600">FLOOR AREA IMPORTANCE</label>
+                                    <span class="text-sm font-bold text-blue-600">5/10</span>
+                                </div>
+                                <input type="range" min="0" max="10" value="5" class="w-full">
+                            </div>
+                             <div class="slider-group">
+                                <div class="flex justify-between items-center mb-1">
+                                    <label class="text-sm font-semibold text-slate-600">STOREY RANGE IMPORTANCE</label>
+                                    <span class="text-sm font-bold text-blue-600">5/10</span>
+                                </div>
+                                <input type="range" min="0" max="10" value="5" class="w-full">
+                            </div>
+                             <div class="slider-group">
+                                <div class="flex justify-between items-center mb-1">
+                                    <label class="text-sm font-semibold text-slate-600">REMAINING LEASE IMPORTANCE</label>
+                                    <span class="text-sm font-bold text-blue-600">5/10</span>
+                                </div>
+                                <input type="range" min="0" max="10" value="5" class="w-full">
+                            </div>
+                             <div class="slider-group">
+                                <div class="flex justify-between items-center mb-1">
+                                    <label class="text-sm font-semibold text-slate-600">PROXIMITY TO MRT</label>
+                                    <span class="text-sm font-bold text-blue-600">5/10</span>
+                                </div>
+                                <input type="range" min="0" max="10" value="5" class="w-full">
+                            </div>
+                        </div>
+                        
+                        <div class="mt-8">
+                            <button id="find-home-btn" class="w-full bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition flex items-center justify-center">
+                                <i data-lucide="search" class="w-5 h-5 mr-2"></i>
+                                Find My Home
+                            </button>
+                        </div>
+                    </div>
+                </aside>
+
+                <!-- Right Content: Results -->
+                <section class="lg:col-span-8 xl:col-span-9 mt-8 lg:mt-0">
+                    <!-- Initial State -->
+                    <div id="initial-state" class="flex flex-col items-center justify-center text-center h-full bg-white/50 rounded-2xl p-8">
+                        <div class="bg-blue-100 text-blue-600 rounded-full p-4 mb-4">
+                            <i data-lucide="home" class="w-12 h-12"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold mb-2">Ready to Find Your Home?</h2>
+                        <p class="text-slate-600 max-w-sm">Set your must-haves and preferences in the sidebar, then click "Find My Home" to get personalized recommendations.</p>
+                    </div>
+
+                    <!-- Results State (Hidden by default) -->
+                    <div id="results-state" class="hidden">
+                        <h2 class="text-2xl font-bold mb-4">Your Top Recommendations</h2>
+                        <p class="text-slate-600 mb-6">Found 3 matching flats. Showing your best matches.</p>
+
+                        <div class="space-y-6">
+                            <!-- Result Card 1 -->
+                            <div class="bg-white p-6 rounded-2xl shadow-lg border border-transparent hover:border-blue-500 transition">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h3 class="text-xl font-bold text-slate-800">Ang Mo Kio Ave 3, Block 123</h3>
+                                        <p class="text-slate-500">4-Room • Improved</p>
+                                    </div>
+                                    <div class="bg-cyan-400 text-white text-lg font-bold px-4 py-2 rounded-lg">8.7/10</div>
+                                </div>
+                                <div class="mt-4 grid md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                                    <div class="flex items-center gap-2"><i data-lucide="tag" class="w-5 h-5 text-slate-400"></i><div><span class="font-semibold">Price</span><br>S$485,000</div></div>
+                                    <div class="flex items-center gap-2"><i data-lucide="maximize" class="w-5 h-5 text-slate-400"></i><div><span class="font-semibold">Floor Area</span><br>92 sqm</div></div>
+                                    <div class="flex items-center gap-2"><i data-lucide="layers" class="w-5 h-5 text-slate-400"></i><div><span class="font-semibold">Storey</span><br>07 to 09</div></div>
+                                    <div class="flex items-center gap-2"><i data-lucide="calendar-days" class="w-5 h-5 text-slate-400"></i><div><span class="font-semibold">Lease</span><br>75 yrs</div></div>
+                                </div>
+                                <div class="mt-4 bg-blue-50/70 p-4 rounded-lg">
+                                    <div class="flex items-center text-blue-700 font-semibold mb-2">
+                                        <i data-lucide="lightbulb" class="w-5 h-5 mr-2"></i>AI INSIGHT
+                                    </div>
+                                    <p class="text-slate-700 text-sm">This unit is priced ~$15k below our market estimate for this block. Excellent value considering the floor area and remaining lease.</p>
+                                    <div class="mt-2 flex gap-2">
+                                        <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">Good Value</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Result Card 2 -->
+                            <div class="bg-white p-6 rounded-2xl shadow-lg border border-transparent hover:border-blue-500 transition">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h3 class="text-xl font-bold text-slate-800">Bedok North St 3, Block 456</h3>
+                                        <p class="text-slate-500">5-Room • Premium Apartment</p>
+                                    </div>
+                                    <div class="bg-cyan-400 text-white text-lg font-bold px-4 py-2 rounded-lg">8.4/10</div>
+                                </div>
+                                <div class="mt-4 grid md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                                    <div class="flex items-center gap-2"><i data-lucide="tag" class="w-5 h-5 text-slate-400"></i><div><span class="font-semibold">Price</span><br>S$620,000</div></div>
+                                    <div class="flex items-center gap-2"><i data-lucide="maximize" class="w-5 h-5 text-slate-400"></i><div><span class="font-semibold">Floor Area</span><br>110 sqm</div></div>
+                                    <div class="flex items-center gap-2"><i data-lucide="layers" class="w-5 h-5 text-slate-400"></i><div><span class="font-semibold">Storey</span><br>10 to 12</div></div>
+                                    <div class="flex items-center gap-2"><i data-lucide="calendar-days" class="w-5 h-5 text-slate-400"></i><div><span class="font-semibold">Lease</span><br>82 yrs</div></div>
+                                </div>
+                                <div class="mt-4 bg-blue-50/70 p-4 rounded-lg">
+                                    <div class="flex items-center text-blue-700 font-semibold mb-2">
+                                        <i data-lucide="lightbulb" class="w-5 h-5 mr-2"></i>AI INSIGHT
+                                    </div>
+                                    <p class="text-slate-700 text-sm">Premium location near MRT. The higher price is justified by its 'Premium Apartment' model and proximity to amenities.</p>
+                                     <div class="mt-2 flex gap-2">
+                                        <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">Premium Location</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+        
+        <footer class="text-center py-8 mt-12 border-t border-slate-200">
+            <p class="text-slate-500 text-sm">&copy; 2025 FlatWise by CS3263 Group 5. Powered by AI for smarter home searches.</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize Lucide icons
+            lucide.createIcons();
+
+            // --- UI INTERACTIONS ---
+
+            // 1. Tag button toggling
+            const tagButtons = document.querySelectorAll('.tag-btn');
+            tagButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    button.classList.toggle('active');
+                });
+            });
+
+            // 2. Slider value updates
+            const sliders = document.querySelectorAll('.slider-group');
+            sliders.forEach(group => {
+                const range = group.querySelector('input[type="range"]');
+                const valueSpan = group.querySelector('span');
+                
+                range.addEventListener('input', () => {
+                    valueSpan.textContent = `${range.value}/10`;
+                });
+            });
+
+            // 3. Search button functionality
+            const findHomeBtn = document.getElementById('find-home-btn');
+            const initialState = document.getElementById('initial-state');
+            const resultsState = document.getElementById('results-state');
+
+            findHomeBtn.addEventListener('click', () => {
+                // Here you would normally fetch data and process it.
+                // For this prototype, we'll just switch the views.
+                initialState.classList.add('hidden');
+                resultsState.classList.remove('hidden');
+                
+                // Optional: scroll to the results on mobile
+                if (window.innerWidth < 1024) {
+                    resultsState.scrollIntoView({ behavior: 'smooth' });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

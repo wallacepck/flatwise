@@ -4,13 +4,13 @@ body {
     color: #1a202c;
 }
 
-.card {
+/* .card {
     border-radius: 14px;
     box-shadow: 0 2px 8px #0001;
     background: white;
     margin-bottom: 28px;
     padding: 28px;
-}
+} */
 
 /* Pill buttons */
 .pill-btn {
@@ -38,15 +38,16 @@ body {
 }
 .pill-btn.active .close-icon { display: inline-block; }
 
-.ai-insight {
+/* .ai-insight {
     background: #e0f2fe;
     border-left: 4px solid #06b6d4;
     padding: .8em 1em;
     font-size: 1em;
-}
+} */
+/* 
 
 /* Add other utility classes or overrides for spacing, layouts, and modals as desired */
-.card:hover {
+/* .card:hover {
     box-shadow: 0 4px 16px #0002;
     transform: translateY(-2px);
-}
+} */ 

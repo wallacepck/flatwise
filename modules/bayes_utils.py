@@ -30,12 +30,12 @@ def convert_numeric_to_interval(input_df: pd.Series, categories_df: pd.DataFrame
     Returns:
         pd.Series: Updated Series with numeric columns converted to categorical.
     """
-    numeric_columns = ['remaining_lease_years', 'floor_area_sqm']
+    numeric_columns = ['remaining_lease_years', 'floor_area_sqm', 'resale_price']
     for col in numeric_columns:
         if col in input_df.keys() and col in categories_df.columns:
             categories : list[pd.Interval] = categories_df[col].dropna().tolist()
             for c in categories:
-                if c.left <= input_df[col] and input_df[col] <= c.right:
+                if c.left <= input_df[col] and input_df[col] < c.right:
                     input_df[col] = c
                     break
             else:

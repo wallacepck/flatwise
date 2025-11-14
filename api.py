@@ -31,11 +31,13 @@ class PriorityEnum(str, Enum):
     price = "Price"
     floor_area = "Floor Area"
     lease = "Lease"
+    mrt = "Nearest MRT"
     none = "None - treat equally"
 
 class RecommendRequest(BaseModel):
     constraints: ConstraintModel
     priority: PriorityEnum = PriorityEnum.none
+    page: int = 1
 
 # ---------------------------
 # 2. Application Setup
@@ -103,11 +105,14 @@ def load_global_state():
 def get_weights(priority: PriorityEnum, criteria: dict) -> dict:
     # Use the enum for robust checking
     if priority == PriorityEnum.price:
-        return {"resale_price": 0.6, "floor_area_sqm": 0.2, "remaining_lease_years": 0.2}
+        # Note: Added dist_mrt_km to all priorities
+        return {"resale_price": 0.5, "floor_area_sqm": 0.2, "remaining_lease_years": 0.2, "dist_mrt_km": 0.1}
     elif priority == PriorityEnum.floor_area:
-        return {"resale_price": 0.2, "floor_area_sqm": 0.6, "remaining_lease_years": 0.2}
+        return {"resale_price": 0.2, "floor_area_sqm": 0.5, "remaining_lease_years": 0.2, "dist_mrt_km": 0.1}
     elif priority == PriorityEnum.lease:
-        return {"resale_price": 0.2, "floor_area_sqm": 0.2, "remaining_lease_years": 0.6}
+        return {"resale_price": 0.2, "floor_area_sqm": 0.2, "remaining_lease_years": 0.5, "dist_mrt_km": 0.1}
+    elif priority.value == PriorityEnum.mrt: # Use .value for Enum comparison here
+        return {"resale_price": 0.2, "floor_area_sqm": 0.2, "remaining_lease_years": 0.1, "dist_mrt_km": 0.5}
     else:
         # Equal weights if no priority
         return {key: 1/len(criteria) for key in criteria.keys()}
@@ -115,9 +120,13 @@ def get_weights(priority: PriorityEnum, criteria: dict) -> dict:
 # ---------------------------
 # Routes
 # ---------------------------
+# ---------------------------
+# Routes
+# ---------------------------
 @app.get("/")
 def read_root():
     return {"status": "FlatWise API is running."}
+
 
 @app.post("/recommend")
 async def recommend(request_data: RecommendRequest, request: Request):
@@ -126,56 +135,75 @@ async def recommend(request_data: RecommendRequest, request: Request):
     Uses Pydantic model 'RecommendRequest' for automatic validation.
     """
     
-    # Check if startup failed to load data
     if not hasattr(app.state, 'df') or app.state.df is None:
         raise HTTPException(
-            status_code=503, # Service Unavailable
+            status_code=503,
             detail="Server is not ready, required data files could not be loaded."
         )
 
     try:
-        # Access data loaded during startup
         df = request.app.state.df
         criteria = request.app.state.mcda_criteria
         insight_generator = request.app.state.insight_generator
         
         # 1. Get validated data
-        # Pydantic has already validated this, no .get() needed
-        # .dict() converts the Pydantic model to a dict for your legacy functions
         constraints = request_data.constraints.dict(exclude_unset=True)
         priority = request_data.priority
+        page = request_data.page
 
         # 2. Apply constraints
         filtered_df, _ = csp_filter_flats(df, constraints)    
         if filtered_df.empty:
-            return JSONResponse(content={"recommendations": []})
+            return JSONResponse(content={"recommendations": [], "total_found": 0})
 
-        # --- NEW FAST CODE ---
-        # 3. Apply MCDA
+        # --- FIX START: Order of operations ---
+        
+        # 3. Create a clean copy *before* MCDA
+        clean_df_for_insights = filtered_df.copy()
+        
+        # 4. Apply MCDA to get scores and rankings
         weights = get_weights(priority, criteria)
-        ranked_df, _ = mcda_wsm(filtered_df, criteria, weights)
+        ranked_df, _ = mcda_wsm(filtered_df, criteria, weights) 
 
-        # 4. Get the Top 10 FIRST
-        # Use .copy() to avoid a common pandas warning
-        top_10_df = ranked_df.head(10).copy()
+        # 5. Get total number of results *before* slicing
+        total_found = len(ranked_df)
 
-        # 5. Generate insights (FAST: runs only 10 times)
-        top_10_df["insight"] = [
+        # 6. Calculate page slice
+        start_index = (page - 1) * 10
+        end_index = page * 10
+        
+        # 7. Get the Top 10 rows for the *current page*
+        page_ranked_rows = ranked_df.iloc[start_index:end_index]
+        if page_ranked_rows.empty:
+             return JSONResponse(content={"recommendations": [], "total_found": total_found})
+
+        # 8. Get the *original* indices from the "index" column
+        page_original_indices = page_ranked_rows['index']
+        
+        # 9. Use these *original* indices to pull the clean data
+        page_df = clean_df_for_insights.loc[page_original_indices].copy()
+        
+        # 10. Manually add the 'score' column
+        page_df['score'] = page_ranked_rows['score'].values
+        
+        # --- FIX END ---
+
+        # 11. Generate insights (FAST: runs only 10 times)
+        page_df["insight_summary"] = [
             insight_generator.get_insights_on_row(row)
-            for _, row in top_10_df.iterrows()
+            for _, row in page_df.iterrows()
         ]
 
-        # 6. Return top 10
-        top = top_10_df.to_dict(orient="records")
-        return {"recommendations": top}
+        # 12. Return the final data
+        top = page_df.to_dict(orient="records")
+        # Return the 10 results AND the total number found
+        return {"recommendations": top, "total_found": total_found}
 
     except Exception as e:
-        # Catch-all for any other unhandled errors
         print(f"Error during recommendation: {e}")
-        # Log the full error (e.g., using logging library)
         raise HTTPException(
             status_code=500,
-            detail="An internal server error occurred while processing your request."
+            detail=f"An internal server error occurred: {str(e)}"
         )
 
 @app.get("/health")

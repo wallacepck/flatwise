@@ -1,5 +1,11 @@
 // --- App State ---
-let currentRecommendations = [];
+let currentRecommendations = []; // Holds ALL flats shown so far
+let currentPage = 1;
+let totalFound = 0;
+let isLoadingMore = false;
+let currentConstraints = {};
+let currentPriority = "";
+// --- App State ---
 
 // --- Lookups (Unchanged) ---
 const REGION_LOOKUP = {
@@ -50,6 +56,48 @@ const parseStorey = (storeyRange) => {
     return match ? parseInt(match[1], 10) : 0;
 };
 
+// NEW: Helper function to calculate walking time
+// Based on 5 km/h (or 12 minutes per km)
+function calculateWalkTime(distanceInKm) {
+    if (distanceInKm === null || isNaN(distanceInKm)) {
+        return null;
+    }
+    // (distanceInKm / 5 km/h) * 60 min/h = distanceInKm * 12
+    const timeInMinutes = distanceInKm * 12;
+    
+    // Round to the nearest minute
+    const minutes = Math.round(timeInMinutes);
+
+    // Handle 0-minute walks (e.g., 84m is 1.008 min, rounds to 1)
+    if (minutes < 1) {
+        return "~1 min walk";
+    }
+    return `~${minutes} min walk`;
+}
+
+const MRT_DISTANCE_STEPS = [
+    // Step 0
+    { value: 0.5, label: "Very Close (within 500m)", walk: "~5-7 min walk" },
+    // Step 1
+    { value: 1.0, label: "Walkable (within 1km)", walk: "~10-12 min walk" },
+    // Step 2
+    { value: 1.5, label: "Long Walk (within 1.5km)", walk: "~15-18 min walk" },
+    // Step 3
+    { value: 2.0, label: "Accessible (within 2km)", walk: "~20-25 min walk" },
+    // Step 4
+    { value: null, label: "Any Distance", walk: "No MRT filter" }
+];
+
+function updateMrtLabel() {
+    const slider = document.getElementById('max-mrt-dist-slider');
+    const output = document.getElementById('mrt-distance-output');
+    
+    if (slider && output) {
+        const stepIndex = parseInt(slider.value);
+        const step = MRT_DISTANCE_STEPS[stepIndex];
+        output.textContent = `${step.label} · ${step.walk}`;
+    }
+}
 
 // --- Event Listeners ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -65,6 +113,16 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('start-search-btn')?.addEventListener('click', () => {
         document.getElementById('search-section')?.scrollIntoView({ behavior: 'smooth' });
     });
+    const mrtSlider = document.getElementById('max-mrt-dist-slider');
+    if (mrtSlider) {
+        mrtSlider.addEventListener('input', updateMrtLabel);
+    }
+    // Set the initial label text when the page loads
+    updateMrtLabel(); 
+    // ---------------------------------------------
+
+    // Setup Dropdowns
+    populateTownDropdown();
 
     // Setup Dropdowns
     populateTownDropdown(); setupTownDropdownListeners(); updateTownDisplay();
@@ -75,6 +133,22 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('results-container').innerHTML = '<div class="text-center py-10 px-6 bg-gray-50 rounded-lg"><i class="fas fa-search-location fa-2x text-gray-400 mb-3"></i><p class="text-gray-500">Your recommended flats will appear here.</p></div>';
 });
 
+// NEW: Helper function to get pill styles based on tier
+function getPillStyles(tier) {
+    switch (tier) {
+        case "Good":
+            // Green: #3CBF96
+            return "bg-[#3CBF96] text-white border-[#34A853]";
+        case "Bad":
+            // Red: #f04f52
+            return "bg-[#f04f52] text-white border-[#E74639]";
+        case "Average":
+        default:
+            // Yellow: #d5dcdf (using dark text for contrast)
+            return "bg-[#d5dcdf] text-[#26332e] border-[#d5dcdf]"; //grey
+            
+    }
+}
 
 // --- Town Dropdown Functions ---
 
@@ -269,46 +343,84 @@ function getSelectedFlatModels() {
     return Array.from(document.querySelectorAll('.flat-model-checkbox:checked')).map(cb => cb.value);
 }
 // --- Core App Logic ---
+// This function is now just for the "Find My Home" button
 async function fetchRecommendations() {
+    if (isLoadingMore) return; // Prevent new search while loading
+    isLoadingMore = true;
+
+    // Reset state for a new search
+    currentPage = 1;
+    currentRecommendations = [];
+    document.getElementById('results-container').innerHTML = '<div class="text-center py-10"><i class="fas fa-spinner fa-spin fa-2x text-blue-500"></i></div>';
+    document.getElementById('loader-container').innerHTML = '';
+
     const findButton = document.getElementById('find-btn');
     findButton.disabled = true;
     findButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Searching...';
-    document.getElementById('results-container').innerHTML = '<div class="text-center py-10"><i class="fas fa-spinner fa-spin fa-2x text-blue-500"></i></div>';
 
-    const constraints = {
+    // Save constraints globally
+    currentConstraints = {
         max_price: parseInt(document.getElementById("max-price-input").value) || 10000000,
         min_remaining_lease: parseInt(document.getElementById("min-lease-input").value) || 0,
         towns: getSelectedTowns(),
         flat_types: getSelectedPills("flat-type-pill-list").map(type => type.replace('-', ' ')),
         storey_ranges: getSelectedStoreys(),
-        flat_models: getSelectedFlatModels()
+        flat_models: getSelectedFlatModels(),
+        max_mrt_distance: MRT_DISTANCE_STEPS[parseInt(document.getElementById('max-mrt-dist-slider').value)].value
     };
+    currentPriority = document.getElementById("priority-select").value;
+
+    // Fetch the first page
+    await fetchPageData(true); // true = overwrite
+
+    // Re-enable button
+    findButton.disabled = false;
+    findButton.innerHTML = '<i class="fas fa-search mr-2"></i>Find My Home';
+    isLoadingMore = false;
+}
+// NEW function to fetch data for a specific page
+async function fetchPageData(overwrite) {
+    isLoadingMore = true;
+    const loaderContainer = document.getElementById('loader-container');
     
-    const priority = document.getElementById("priority-select").value;
+    // Show spinner in loader area if it's a "see more" click
+    if (!overwrite) {
+        loaderContainer.innerHTML = '<i class="fas fa-spinner fa-spin fa-2x text-blue-500"></i>';
+    }
 
     try {
         const response = await fetch("http://127.0.0.1:8000/recommend", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({ constraints, priority })
+            body: JSON.stringify({ 
+                constraints: currentConstraints, 
+                priority: currentPriority, 
+                page: currentPage 
+            })
         });
+
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        
         const data = await response.json();
-        
-        // Store the full, unsorted list
-        currentRecommendations = data.recommendations || []; 
-        
-        // Render the sorted (or default) list
-        sortAndRenderResults(currentRecommendations);
-        
+        const newFlats = data.recommendations || [];
+        totalFound = data.total_found || 0;
+
+        if (overwrite) {
+            currentRecommendations = newFlats;
+        } else {
+            currentRecommendations.push(...newFlats);
+        }
+
+        // Pass the *new* flats to be rendered
+        renderFlats(newFlats, overwrite);
+
     } catch (error) {
         console.error("Fetch error:", error);
-        currentRecommendations = []; // Clear state on error
         document.getElementById('results-container').innerHTML = '<div class="text-center py-10 px-6 bg-red-50 rounded-lg"><i class="fas fa-exclamation-triangle fa-2x text-red-400 mb-3"></i><p class="text-red-600">Could not retrieve recommendations. Check logs for errors.</p></div>';
-    } finally {
-        findButton.disabled = false;
-        findButton.innerHTML = '<i class="fas fa-search mr-2"></i>Find My Home';
     }
+    
+    isLoadingMore = false;
+    // The "See More" button logic is now handled by renderFlats
 }
 
 
@@ -327,8 +439,10 @@ function sortAndRenderResults(flats) {
     //       <option value="price-desc">Price (High to Low)</option>
     //       <option value="recommended">Recommended</option>
 
+    
+
     const sortBy = document.getElementById('sort').value;
-    const sortedFlats = [...flats]; // Create a new array to sort, preserving the original
+    const sortedFlats = [...currentRecommendations]; // Create a new array to sort, preserving the original
 
     switch (sortBy) {
         case 'price-asc': // Changed from 'Price (Low to High)'
@@ -344,8 +458,8 @@ function sortAndRenderResults(flats) {
             // Uses the new robust parser
             sortedFlats.sort((a, b) => parseStorey(b.storey_range) - parseStorey(a.storey_range));
             break;
-        case 'mrt-asc': // Changed from 'Nearest MRT'
-            sortedFlats.sort((a, b) => (a.mrt_distance_m || Infinity) - (b.mrt_distance_m || Infinity));
+        case 'mrt-asc': 
+            sortedFlats.sort((a, b) => (a.dist_mrt_km || Infinity) - (b.dist_mrt_km || Infinity));
             break;
         case 'recommended': // Changed from 'Recommended'
         default:
@@ -353,7 +467,7 @@ function sortAndRenderResults(flats) {
             break;
     }
     
-    renderFlats(sortedFlats);
+    renderFlats(sortedFlats, true);
 }
 
 function getSelectedPills(containerId){const container=document.getElementById(containerId);if(!container)return[];return Array.from(container.querySelectorAll('.pill-btn.active')).map(pill=>pill.textContent.trim().replace(/\s*×$/,''))}
@@ -367,31 +481,35 @@ function togglePill(element){element.classList.toggle('active')}
  * 4. Handles new optional data (rank, constraintsMet, mrtDistance) with checks.
  * 5. Secure (escapeHTML) and Performant (map.join).
  */
-function renderFlats(flats) {
+function renderFlats(flats, overwrite) {
     const resultsContainer = document.getElementById('results-container');
     const countElement = document.querySelector('#search-section main p.text-gray-500');
+    const loaderContainer = document.getElementById('loader-container');
 
+    // Clear loader
+    loaderContainer.innerHTML = '';
+
+    // Handle no results
     if (!flats || !flats.length) {
-        resultsContainer.innerHTML = `
-            <div class="text-center py-10 px-6 bg-yellow-50 rounded-lg">
-                <i class="fas fa-ghost fa-2x text-yellow-400 mb-3"></i>
-                <p class="text-yellow-600">No flats found matching your criteria. Try adjusting your filters.</p>
-            </div>
-        `;
-        countElement.textContent = 'Found 0 matching flats.';
+        if (overwrite) { // Only show this if it's a new search
+            resultsContainer.innerHTML = `
+                <div class="text-center py-10 px-6 bg-yellow-50 rounded-lg">
+                    <i class="fas fa-ghost fa-2x text-yellow-400 mb-3"></i>
+                    <p class="text-yellow-600">No flats found matching your criteria. Try adjusting your filters.</p>
+                </div>
+            `;
+        }
+        countElement.textContent = `Found ${totalFound} matching flats.`;
+        loaderContainer.innerHTML = '<p class="text-gray-500">No more flats found.</p>';
         return;
     }
 
-    // Use the global state for the *count*, but the passed `flats` for *rendering*.
-    countElement.textContent = `Found ${currentRecommendations.length} matching flats. Showing ${flats.length} results.`;
-
-    // --- Helper functions from the React code, translated to JS ---
+    // --- Helper functions ---
     const getScoreColor = (score) => {
-        if (score >= 8) return "bg-[#2DD4BF] text-white"; // accent
-        if (score >= 6) return "bg-[#3B82F6] text-white"; // primary
-        return "bg-gray-100 text-gray-600"; // secondary
+        if (score >= 8) return "bg-[#2DD4BF] text-white";
+        if (score >= 6) return "bg-[#3B82F6] text-white";
+        return "bg-gray-100 text-gray-600";
     };
-
     const getRankingReason = (score) => {
         if (score >= 9) return "Excellent overall match for all your criteria";
         if (score >= 8) return "Strong match with premium features";
@@ -399,9 +517,21 @@ function renderFlats(flats) {
         if (score >= 6) return "Solid option meeting most requirements";
         return "Meets essential criteria";
     };
+    
+    const calculateWalkTime = (distanceInKm) => {
+        if (distanceInKm === null || isNaN(distanceInKm)) return null;
+        const timeInMinutes = distanceInKm * 12; // 5 km/h = 12 min/km
+        const minutes = Math.round(timeInMinutes);
+        if (minutes < 1) return "~1 min walk";
+        return `~${minutes} min walk`;
+    };
+    // --- End Helpers ---
 
+    // Build HTML for *only the new flats*
     const allCardsHTML = flats.map((flat, index) => {
-        // Securely escape all data from the 'flat' object
+        const globalIndex = overwrite ? index : currentRecommendations.length - flats.length + index;
+        
+        // --- All your const variables (street, block, etc.) ---
         const street = escapeHTML(flat.street_name);
         const block = escapeHTML(flat.block);
         const flatType = escapeHTML(flat.flat_type);
@@ -412,19 +542,24 @@ function renderFlats(flats) {
         const area = escapeHTML(flat.floor_area_sqm);
         const storey = escapeHTML(flat.storey_range);
         const lease = escapeHTML(flat.remaining_lease_years);
-        const insight = escapeHTML(flat.insight);
         
-        // New optional data from your React component
-        const rank = flat.rank || (index + 1); // Use rank if provided, else use index
-        const valueTag = escapeHTML(flat.valueTag);
-        const mrtDistance = escapeHTML(flat.mrt_distance_m);
-        const mrtWalkingTime = escapeHTML(flat.mrt_walking_time_m);
-        const constraintsMet = flat.constraintsMet || {}; // Default to empty object
+        // Insight object
+        const insightData = flat.insight_summary || { tiers: {}, text: "" };
+        const tiers = insightData.tiers || {};
+        const insightText = escapeHTML(insightData.text);
+        
+        // MRT Data
+        const distKm = flat.dist_mrt_km; 
+        const mrtMeters = (distKm !== null && !isNaN(distKm)) ? Math.round(distKm * 1000) : null;
+        const walkTime = calculateWalkTime(distKm);
+        
+        // Other data
+        const rank = flat.rank || (globalIndex + 1);
+        const constraintsMet = flat.constraintsMet || {};
 
-        // --- Build the HTML string ---
+        // --- Start Card HTML ---
         return `
         <div class="border border-border bg-white rounded-xl shadow-sm transition-all duration-300 hover:shadow-lg">
-            
             <div class="p-4 pb-3">
                 <div class="flex items-start justify-between gap-4">
                     <div class="flex-1">
@@ -436,38 +571,13 @@ function renderFlats(flats) {
                                 ${street}, Block ${block}
                             </h3>
                         </div>
-                        
                         <div class="flex items-center gap-2 text-sm text-gray-500 mb-2">
                             <i class="fas fa-home h-4 w-4"></i>
                             <span>${flatType} · ${flatModel}</span>
                         </div>
-
                         <p class="text-xs text-gray-500 italic mb-2">
                             ${getRankingReason(score)}
                         </p>
-
-                        <div class="flex flex-wrap gap-2">
-                            ${constraintsMet.price ? `
-                                <span class="text-xs bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded-full flex items-center">
-                                    <i class="fas fa-check-circle h-3 w-3 mr-1"></i>
-                                    Within Budget
-                                </span>` : ''}
-                            ${constraintsMet.lease ? `
-                                <span class="text-xs bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded-full flex items-center">
-                                    <i class="fas fa-check-circle h-3 w-3 mr-1"></i>
-                                    Lease ✓
-                                </span>` : ''}
-                            ${constraintsMet.floorArea ? `
-                                <span class="text-xs bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded-full flex items-center">
-                                    <i class="fas fa-check-circle h-3 w-3 mr-1"></i>
-                                    Size ✓
-                                </span>` : ''}
-                            ${constraintsMet.mrt ? `
-                                <span class="text-xs bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded-full flex items-center">
-                                    <i class="fas fa-check-circle h-3 w-3 mr-1"></i>
-                                    MRT ✓
-                                </span>` : ''}
-                        </div>
                     </div>
                     <div class="px-3 py-1.5 rounded-lg font-bold text-sm shrink-0 ${getScoreColor(score)}">
                         ${score.toFixed(1)}/10
@@ -481,37 +591,25 @@ function renderFlats(flats) {
                         <div class="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
                             <i class="fas fa-dollar-sign text-blue-600"></i>
                         </div>
-                        <div>
-                            <p class="text-xs text-gray-500">Price</p>
-                            <p class="text-sm font-semibold text-gray-900">S$${price}</p>
-                        </div>
+                        <div><p class="text-xs text-gray-500">Price</p><p class="text-sm font-semibold text-gray-900">S$${price}</p></div>
                     </div>
-                      <div class="flex items-center gap-2">
-                          <div class="w-8 h-8 rounded-lg bg-[var(--accent-foreground)] flex items-center justify-center">
-                              <i class="fas fa-expand text-[var(--accent)]"></i>
-                          </div>
-                          <div>
-                              <p class="text-xs text-gray-500">Floor Area</p>
-                              <p class="text-sm font-semibold text-gray-900">${area} sqm</p>
-                          </div>
-                      </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-lg bg-[var(--accent-foreground)] flex items-center justify-center">
+                            <i class="fas fa-expand text-[var(--accent)]"></i>
+                        </div>
+                        <div><p class="text-xs text-gray-500">Floor Area</p><p class="text-sm font-semibold text-gray-900">${area} sqm</p></div>
+                    </div>
                     <div class="flex items-center gap-2">
                         <div class="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
                             <i class="fas fa-building text-blue-600"></i>
                         </div>
-                        <div>
-                            <p class="text-xs text-gray-500">Storey</p>
-                            <p class="text-sm font-semibold text-gray-900">${storey}</p>
-                        </div>
+                        <div><p class="text-xs text-gray-500">Storey</p><p class="text-sm font-semibold text-gray-900">${storey}</p></div>
                     </div>
                     <div class="flex items-center gap-2">
                         <div class="w-8 h-8 rounded-lg bg-[var(--accent-foreground)] flex items-center justify-center">
                             <i class="fas fa-calendar-alt text-[var(--accent)]"></i>
                         </div>
-                        <div>
-                            <p class="text-xs text-gray-500">Lease</p>
-                            <p class="text-sm font-semibold text-gray-900">${lease} yrs</p>
-                        </div>
+                        <div><p class="text-xs text-gray-500">Lease</p><p class="text-sm font-semibold text-gray-900">${lease} yrs</p></div>
                     </div>
                 </div>
 
@@ -520,40 +618,73 @@ function renderFlats(flats) {
                         <i class="fas fa-map-marker-alt h-4 w-4"></i>
                         <span>${town}</span>
                     </div>
-                    ${(mrtDistance || mrtWalkingTime) ? `
+                    ${mrtMeters !== null ? `
                         <div class="flex items-center gap-2 text-sm text-gray-500">
                             <i class="fas fa-train h-4 w-4"></i>
-                            <span>
-                                ${mrtDistance ? `${mrtDistance}m` : `${mrtWalkingTime} min walk`}
-                            </span>
+                            <span class="font-semibold">${mrtMeters}m</span>
+                            <span class="text-xs">(${walkTime})</span>
                         </div>
                     ` : ''}
                 </div>
 
-                <div class="bg-white border-2 border-teal-200 rounded-lg p-4 space-y-3 shadow-sm">
-            
-                  <div class="flex items-center gap-2">
-                      <div class="w-8 h-8 rounded-lg bg-[var(--accent-foreground)] flex items-center justify-center">
-                          <i class="fas fa-lightbulb text-[var(--accent)]"></i>
+                <div class="bg-white border-2 border-teal-200 rounded-lg p-4 space-y-4 shadow-sm">
+                  <div class="flex flex-wrap items-center justify-between gap-2">
+                      <div class="flex items-center gap-2">
+                          <div class="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center">
+                              <i class="fas fa-lightbulb h-4 w-4 text-[var(--accent)]"></i>
+                          </div>
+                          <span class="text-sm font-bold text-[var(--accent)] uppercase tracking-wide">AI Insight Summary</span>
                       </div>
-                      <span class="text-sm font-bold text-[var(--accent)] uppercase tracking-wide">AI Market Insight</span>
-                  </div>
-                  
-                  <p class="text-sm text-gray-800 leading-relaxed font-medium">${escapeHTML(flat.insight)}</p>
-                  
-                  ${flat.valueTag ? `
-                      <div class="flex gap-2">
-                          <span class="text-xs font-semibold bg-blue-600 text-white px-2.5 py-1 rounded-full">
-                              ${escapeHTML(flat.valueTag)}
+                      <div class="flex flex-wrap gap-2">
+                          <span class="flex items-center text-xs font-semibold px-2.5 py-1 rounded-full border ${getPillStyles(tiers.lease_value)}">
+                              <i class="fas fa-tags mr-1.5"></i>
+                              Value vs. Lease: ${escapeHTML(tiers.lease_value)}
+                          </span>
+                          <span class="flex items-center text-xs font-semibold px-2.5 py-1 rounded-full border ${getPillStyles(tiers.resale_risk)}">
+                              <i class="fas fa-chart-line mr-1.5"></i>
+                              Resale Risk: ${escapeHTML(tiers.resale_risk)}
+                          </span>
+                          <span class="flex items-center text-xs font-semibold px-2.5 py-1 rounded-full border ${getPillStyles(tiers.size_value)}">
+                              <i class="fas fa-ruler-combined mr-1.5"></i>
+                              Value vs. Size: ${escapeHTML(tiers.size_value)}
                           </span>
                       </div>
-                  ` : ''}
-              </div>
+                  </div>
+                  <p class="text-sm text-gray-800 leading-relaxed font-medium pt-3 border-t border-teal-200/50">
+                      ${insightText}
+                  </p>
+                </div>
             </div>
         </div>
         `;
+        // --- End Card HTML ---
     }).join('');
 
-    // Perform a SINGLE, fast, and secure DOM update.
-    resultsContainer.innerHTML = allCardsHTML;
+    // --- NEW RENDER LOGIC ---
+    if (overwrite) {
+        resultsContainer.innerHTML = allCardsHTML; // Replace content
+    } else {
+        resultsContainer.insertAdjacentHTML('beforeend', allCardsHTML); // Append content
+    }
+
+    // Update count
+    countElement.textContent = `Found ${totalFound} matching flats. Showing ${currentRecommendations.length}.`;
+
+    // Add "See More" button or "No more" text
+    if (currentRecommendations.length < totalFound) {
+        loaderContainer.innerHTML = `
+            <button onclick="seeMore()" class="bg-[#3B82F6] text-white font-semibold py-2 px-5 rounded-lg hover:opacity-90 transition">
+                See More
+            </button>
+        `;
+    } else if (totalFound > 0) {
+        loaderContainer.innerHTML = '<p class="text-gray-500">No more flats found.</p>';
+    }
+}
+
+// NEW: Function to be called by the "See More" button
+async function seeMore() {
+    if (isLoadingMore) return;
+    currentPage++;
+    await fetchPageData(false); // false = append
 }

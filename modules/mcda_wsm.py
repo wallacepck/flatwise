@@ -75,7 +75,7 @@ def mcda_wsm(
     # Sort descending by score
     df = df.sort_values(rank_col, ascending=False)
     df['rank'] = np.arange(1, len(df)+1)
-    df = df.reset_index(drop=True)
+    df = df.reset_index()
 
     
     # For transparency, bundle weights/labels for each criterion
